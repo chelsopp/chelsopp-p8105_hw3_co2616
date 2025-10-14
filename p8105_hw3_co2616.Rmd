@@ -300,4 +300,7 @@ mims_df %>%
 Overall males and females have similar total activity over the 24-hour activity time course. 
 It looks like the total activity time over the 24-hour activity time course for participants with education levels of high school equivalent and less than high school are similar. However, participants with education levels of more than high school have increase total activity time over the 24-hour activity time course.
 
+```{r}
+usethis::create_github_token()
+```
 
