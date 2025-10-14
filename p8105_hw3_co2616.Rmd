@@ -6,6 +6,9 @@ date: "2025-10-13"
 
 ```{r}
 library(tidyverse)
+library(rvest)
+library(httr)
+library(patchwork)
 ```
 
 ## Problem 1
@@ -17,8 +20,6 @@ library(p8105.datasets)
 data("instacart")
 ```
 
-The `instacart` dataset has `r nrow(instacart)` observations and `r ncol(instacart)` variables and tells us the order and product details of online grocery orders via instacart in 2017. This dataset contains key variables such as `product_name` which shows the name of the food products ordered, `department` which describes the department the food product is categorized under, `add_to_cart_order` which tells the order in which the food product was added to the online cart, and `order_hour_of_day` which tells the hour of the day in which the order was placed. The average order number in which a food product was added to the cart is `r mean(pull(instacart, add_to_cart_order))` and the median hour of the day in which a order was placed is `r median(pull(instacart, order_hour_of_day))`.
-
 ```{r}
 instacart %>% 
   group_by(order_hour_of_day) %>% 
@@ -26,6 +27,7 @@ instacart %>%
   geom_histogram()
 ```
 
+The `instacart` dataset has `r nrow(instacart)` observations and `r ncol(instacart)` variables and tells us the order and product details of online grocery orders via instacart in 2017. This dataset contains key variables such as `product_name` which shows the name of the food products ordered, `department` which describes the department the food product is categorized under, `add_to_cart_order` which tells the order in which the food product was added to the online cart, and `order_hour_of_day` which tells the hour of the day in which the order was placed. The average order number in which a food product was added to the cart is `r mean(pull(instacart, add_to_cart_order))` and the median hour of the day in which a order was placed is `r median(pull(instacart, order_hour_of_day))`.
 **How many aisles are there, and which aisles are the most items ordered from?**
 
 ```{r}
@@ -51,7 +53,8 @@ instacart %>%
   summarize(n_obs = n()) %>% 
   filter(n_obs > 10000) %>% 
   ggplot(aes(x = aisle, y = n_obs)) +
-  geom_col()
+  geom_col() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 ```
 
 **Make a table showing the three most popular items in each of the aisles “baking ingredients”, “dog food care”, and “packaged vegetables fruits”. Include the number of times each item is ordered in your table.**
@@ -157,16 +160,22 @@ I noticed the average rental prices under Staten Island from the years 2015 thro
 **Make a plot showing NYC Rental Prices within ZIP codes for all available years. Your plot should facilitate comparisons across boroughs. Comment on any significant elements of this plot.**
 
 ```{r}
-nyc_zillow_df %>% 
-  ggplot(aes(x = rental_price)) +
-  geom_histogram() +
+plot_1 = 
+  nyc_zillow_df %>% 
+  group_by(zip_code, rental_price, borough) %>% 
+  summarise(
+    total_price = sum(rental_price, na.rm = TRUE)) %>% 
+  ggplot(aes(x = zip_code, y = total_price)) +
+  geom_smooth(se = FALSE) +
   facet_grid(. ~ borough) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 ```
+I really did not understand this question. For the plot that I created, I noticed that Brookyln had the highest rental prices while Staten Island and the Bronx had the lowest rental prices.
 
 **Compute the average rental price within each ZIP code over each month in 2023. Make a reader-friendly plot showing the distribution of ZIP-code-level rental prices across boroughs; put differently, your plot should facilitate the comparison of the distribution of average rental prices across boroughs. Comment on this plot.**
 ```{r}
-nyc_zillow_df %>% 
+plot_2 = 
+  nyc_zillow_df %>% 
   drop_na(rental_price) %>% 
   separate(
     date, into = c("year", "month", "day")) %>% 
@@ -180,9 +189,115 @@ nyc_zillow_df %>%
   facet_grid(borough ~ .) +
   theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 ```
+I also did not undersant this question. It look like from my plot Manhattan and Brooklyn had the largest distribution of rental prices. While Staten Island and the bronx had the lowest distribution of rental prices.
 
 **Combine the two previous plots into a single graphic, and export this to a results folder in your repository**
 ```{r}
-
+nyc_zillow_combined_plots = plot_1 / plot_2
+  
+ggsave("nyc_zillow_combined_plots.pdf")
 ```
+
+## Problem 3
+
+**Load, tidy, merge, and otherwise organize the data sets. Your final dataset should include all originally observed variables; exclude participants less than 21 years of age, and those with missing demographic data; and encode data with reasonable variable classes (i.e. not numeric, and using factors with the ordering of tables and plots in mind).**
+
+```{r}
+demo_df = 
+   read_csv("accelerometer_data/nhanes_covar.csv", skip = 4, na = c("NA", ".", "")) %>% 
+  janitor::clean_names()
+
+accel_df = 
+   read_csv("accelerometer_data/nhanes_accel.csv", na = c("NA", ".", "")) %>% 
+  janitor::clean_names() %>% 
+  pivot_longer(
+    cols = min1:min1440,
+    names_to = "minute",
+    values_to = "MIMS",
+    names_prefix = "min"
+  )
+
+mims_df = 
+left_join(demo_df, accel_df, by = "seqn") %>% 
+ filter(age >= 21) %>% 
+ drop_na() %>%
+  mutate(
+  sex = as.factor(sex),
+  education = as.factor(education),
+  minute = as.double(minute),
+  sex = case_match(
+    sex,
+    "1" ~ "male",
+    "2" ~ "female"),
+  education = case_match(
+    education,
+    "1" ~ "Less than high school",
+    "2" ~ "High school equivalent",
+    "3" ~ "More than high school"
+  ))
+```
+
+**Produce a reader-friendly table for the number of men and women in each education category, and create a visualization of the age distributions for men and women in each education category. Comment on these items.**
+
+```{r}
+mims_df %>% 
+  group_by(sex, education) %>% 
+  summarise(n_obs = n()) %>% 
+  pivot_wider(
+    names_from = "sex",
+    values_from = "n_obs"
+  )
+```
+Overall, there are more female participants than males. However, there are more male participants than females in the high school equivalent education level. Also, it looks like the most participants for both females and males are in the more than high school education level.
+
+```{r}
+mims_df %>% 
+  group_by(sex, age, education) %>% 
+  summarise(n_obs = n()) %>% 
+  ggplot(aes(x = age, fill = sex)) + 
+  geom_density(alpha = .4, adjust = .5, color = "blue") +
+  facet_grid(sex ~ education)
+```
+Age distributions are pretty similar across females and males. For the high school equivalent education level the age distribution peak around 60 for males around around 40 for females. Also for the more the high school education level age distribution peak around 40 for males around around 20 for females.
+
+**Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate across minutes to create a total activity variable for each participant. Plot these total activities (y-axis) against age (x-axis); your plot should compare men to women and have separate panels for each education level. Include a trend line or a smooth to illustrate differences. Comment on your plot.**
+
+```{r}
+total_mims_df =
+mims_df %>% 
+group_by(seqn, age, sex, education) %>% 
+  summarise(total_mims = sum(MIMS, na.rm = TRUE))
+
+total_mims_df %>% 
+  ggplot(aes(x = age, y = total_mims, color = sex)) +
+  geom_point(aes(), alpha = .5) +
+  geom_smooth(se = FALSE) +
+  facet_grid(. ~ education) +  labs(
+    title = "Total Activity by Education Level, Age, and Sex",
+    x = "Age",
+    y = "Total activity time"
+  )
+```
+Overall for all education levels, as age increases total activity time decreases. Total activity time peaks around the 20-40 age range. It looks like in the plots where education levels are high school equivalent or more than high school, females have higher total activity time than males. However, in the plot where education levels is less than high school males have higher total activity time than females.
+
+**Accelerometer data allows the inspection activity over the course of the day. Make a three-panel plot that shows the 24-hour activity time courses for each education level and use color to indicate sex. Describe in words any patterns or conclusions you can make based on this graph; including smooth trends may help identify differences.**
+
+```{r}
+mims_df %>% 
+  group_by(minute, sex, education) %>% 
+  summarise(
+   total_mims_24 = sum(MIMS, na.rm = TRUE)
+  ) %>% 
+  ggplot(aes(x = minute, y = total_mims_24, color = sex)) +
+  geom_smooth(se = FALSE) +
+  facet_grid(education ~ .) +
+  labs(
+    title = "24-Hour Activity Time Course by Education Level and Sex",
+    x = "Minute of Day",
+    y = "Total activity time"
+  )
+```
+Overall males and females have similar total activity over the 24-hour activity time course. 
+It looks like the total activity time over the 24-hour activity time course for participants with education levels of high school equivalent and less than high school are similar. However, participants with education levels of more than high school have increase total activity time over the 24-hour activity time course.
+
 
